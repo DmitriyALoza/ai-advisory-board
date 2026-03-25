@@ -1,0 +1,15 @@
+services:
+  ai_advisory_board:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - DB_PATH=data/advisory_board.db
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
