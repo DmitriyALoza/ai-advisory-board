@@ -11,5 +11,12 @@ services:
     ports:
       - "8501:8501"
     volumes:
+      - ./:/app
       - ./data:/app/data
+    command: >
+      streamlit run app/Home.py
+      --server.address=0.0.0.0
+      --server.port=8501
+      --server.fileWatcherType=poll
+      --server.runOnSave=true
     restart: unless-stopped

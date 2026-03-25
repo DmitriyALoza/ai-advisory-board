@@ -114,7 +114,14 @@ docker compose up --build
 
 3. Open `http://localhost:8501`.
 
-`docker-compose.yml` mounts `./data` to `/app/data`, so session storage persists across container restarts.
+`docker-compose.yml` bind-mounts the project into `/app` and enables Streamlit save-watching (`fileWatcherType=poll`), so app code changes appear without rebuilding the container.
+`./data` is mounted to `/app/data`, so session storage persists across container restarts.
+
+If you only changed Python/Streamlit source files:
+- no rebuild needed; just save files and refresh the browser.
+
+If you changed dependencies or the Dockerfile:
+- rebuild with `docker compose up --build`.
 
 ## Notes on `.ppt`
 

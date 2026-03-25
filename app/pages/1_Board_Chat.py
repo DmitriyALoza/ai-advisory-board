@@ -71,17 +71,6 @@ with st.sidebar:
     st.caption("Group chat with 4 investor agents + supervisor")
     st.markdown(f"**Session:** `{st.session_state.session_id}`")
 
-    uploaded_files = st.file_uploader(
-        "Upload startup materials",
-        type=["pdf", "ppt", "pptx", "docx", "txt", "md"],
-        accept_multiple_files=True,
-    )
-    founder_context = st.text_area(
-        "Optional context",
-        placeholder="e.g. We are raising a $2.5M seed, 14 months runway, fintech compliance constraints...",
-        height=140,
-    )
-
     recent_sessions = list_recent_sessions(limit=25)
     if recent_sessions:
         options = [row["session_id"] for row in recent_sessions]
@@ -121,6 +110,16 @@ with left_col:
             "What should the board evaluate?",
             placeholder="Review our pitch deck + forecast and tell us whether to raise now, reposition, or de-risk first.",
             height=140,
+        )
+        founder_context = st.text_area(
+            "Additional context (optional)",
+            placeholder="e.g. We are raising a $2.5M seed, 14 months runway, fintech compliance constraints...",
+            height=120,
+        )
+        uploaded_files = st.file_uploader(
+            "Upload startup materials",
+            type=["pdf", "ppt", "pptx", "docx", "txt", "md"],
+            accept_multiple_files=True,
         )
         submitted = st.form_submit_button("Send To Board", type="primary")
 
