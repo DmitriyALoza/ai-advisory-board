@@ -104,24 +104,26 @@ st.caption("Submit your ask and let the board run an iterative investment review
 left_col, right_col = st.columns([2, 1], gap="large")
 
 with left_col:
-    with st.form("founder_request_form", clear_on_submit=False):
-        startup_name = st.text_input("Startup name (optional)")
-        ask = st.text_area(
-            "What should the board evaluate?",
-            placeholder="Review our pitch deck + forecast and tell us whether to raise now, reposition, or de-risk first.",
-            height=140,
-        )
-        founder_context = st.text_area(
-            "Additional context (optional)",
-            placeholder="e.g. We are raising a $2.5M seed, 14 months runway, fintech compliance constraints...",
-            height=120,
-        )
-        uploaded_files = st.file_uploader(
-            "Upload startup materials",
-            type=["pdf", "ppt", "pptx", "docx", "txt", "md"],
-            accept_multiple_files=True,
-        )
-        submitted = st.form_submit_button("Send To Board", type="primary")
+    form_expanded = st.session_state.phase == "idle" and not st.session_state.messages
+    with st.expander("Founder Input", expanded=form_expanded):
+        with st.form("founder_request_form", clear_on_submit=False):
+            startup_name = st.text_input("Startup name (optional)")
+            ask = st.text_area(
+                "What should the board evaluate?",
+                placeholder="Review our pitch deck + forecast and tell us whether to raise now, reposition, or de-risk first.",
+                height=140,
+            )
+            founder_context = st.text_area(
+                "Additional context (optional)",
+                placeholder="e.g. We are raising a $2.5M seed, 14 months runway, fintech compliance constraints...",
+                height=120,
+            )
+            uploaded_files = st.file_uploader(
+                "Upload startup materials",
+                type=["pdf", "ppt", "pptx", "docx", "txt", "md"],
+                accept_multiple_files=True,
+            )
+            submitted = st.form_submit_button("Send To Board", type="primary")
 
     if submitted:
         if not ask.strip():

@@ -11,6 +11,7 @@ def render_chat_messages(messages: list[BoardMessage]) -> None:
 
     for msg in messages:
         with st.chat_message(name=msg.speaker):
+            st.markdown(f"**{msg.speaker}**")
             if msg.iteration:
                 st.caption(f"Iteration {msg.iteration}")
             st.markdown(msg.content)

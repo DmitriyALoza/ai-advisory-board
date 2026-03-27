@@ -1,5 +1,6 @@
 import json
-from typing import Any
+import re
+from typing import Any, TypeVar
 
 from agents.investor_agents import get_investor_agent
 from agents.supervisor_agent import get_brief_agent, get_critique_agent, get_synthesis_agent
@@ -13,9 +14,11 @@ from orchestration.prompts import (
     SYNTHESIS_PROMPT,
 )
 from services.document_service import build_document_digest
+from pydantic import BaseModel
 
-MAX_CRITIQUE_ITERATIONS = 3
+MAX_CRITIQUE_ITERATIONS = 2
 INVESTOR_ORDER = ["market_maven", "finance_hawk", "product_operator", "risk_guardian"]
+TModel = TypeVar("TModel", bound=BaseModel)
 
 
 def _to_json(data: Any) -> str:
@@ -41,17 +44,71 @@ def _append_message(state: dict, role: str, speaker: str, content: str, iteratio
     )
 
 
-def _run_with_schema_retry(agent: Any, prompt: str, schema_name: str, status_log: list[str]) -> Any:
+def _parse_json_from_text(text: str) -> Any:
+    stripped = text.strip()
+    if not stripped:
+        raise ValueError("empty string")
+
     try:
-        return agent.run(prompt).content
+        return json.loads(stripped)
+    except json.JSONDecodeError:
+        pass
+
+    fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", stripped, re.IGNORECASE | re.DOTALL)
+    if fence_match:
+        fenced = fence_match.group(1).strip()
+        return json.loads(fenced)
+
+    decoder = json.JSONDecoder()
+    for token in ("{", "["):
+        start = stripped.find(token)
+        if start == -1:
+            continue
+        try:
+            parsed, _ = decoder.raw_decode(stripped[start:])
+            return parsed
+        except json.JSONDecodeError:
+            continue
+
+    preview = stripped.replace("\n", " ")[:220]
+    raise ValueError(f"no JSON object or array found in model output: {preview}")
+
+
+def _coerce_schema_output(content: Any, schema: type[TModel]) -> TModel:
+    if isinstance(content, schema):
+        return content
+    if isinstance(content, BaseModel):
+        return schema.model_validate(content.model_dump())
+    if isinstance(content, dict):
+        return schema.model_validate(content)
+    if isinstance(content, str):
+        return schema.model_validate(_parse_json_from_text(content))
+    return schema.model_validate(content)
+
+
+def _run_with_schema_retry(agent: Any, prompt: str, schema: type[TModel], status_log: list[str]) -> TModel:
+    def _attempt(run_prompt: str) -> TModel:
+        run_output = agent.run(run_prompt)
+        content = getattr(run_output, "content", run_output)
+        status = getattr(run_output, "status", None)
+        status_value = str(getattr(status, "value", status)).lower() if status is not None else ""
+
+        if status_value == "error":
+            message = str(content).strip() or f"{schema.__name__} agent returned error status."
+            raise RuntimeError(message)
+
+        return _coerce_schema_output(content, schema)
+
+    try:
+        return _attempt(prompt)
     except Exception as exc:
-        status_log.append(f"{schema_name} generation error: {exc}. Retrying with strict schema instruction.")
+        status_log.append(f"{schema.__name__} generation error: {exc}. Retrying with strict schema instruction.")
         retry_prompt = (
             prompt
             + "\n\nIMPORTANT: Respond ONLY with valid JSON matching the expected schema."
-            + f" Target schema: {schema_name}."
+            + f" Target schema: {schema.__name__}."
         )
-        return agent.run(retry_prompt).content
+        return _attempt(retry_prompt)
 
 
 def _format_investor_chat(review: InvestorReview) -> str:
@@ -133,7 +190,7 @@ def run_board_cycle(state: dict) -> None:
         board_brief: BoardBrief = _run_with_schema_retry(
             brief_agent,
             brief_prompt,
-            "BoardBrief",
+            BoardBrief,
             state["status_log"],
         )
         state["board_brief"] = board_brief
@@ -141,7 +198,7 @@ def run_board_cycle(state: dict) -> None:
         _append_message(
             state,
             role="supervisor",
-            speaker="Lead Partner",
+            speaker="Lead Partner (Supervisor)",
             content=(
                 "Board brief prepared.\n\n"
                 f"**Startup Summary:** {board_brief.startup_summary}\n\n"
@@ -174,7 +231,7 @@ def run_board_cycle(state: dict) -> None:
                 review: InvestorReview = _run_with_schema_retry(
                     investor_agent,
                     prompt,
-                    "InvestorReview",
+                    InvestorReview,
                     state["status_log"],
                 )
 
@@ -205,7 +262,7 @@ def run_board_cycle(state: dict) -> None:
             critique: BoardCritique = _run_with_schema_retry(
                 critique_agent,
                 critique_prompt,
-                "BoardCritique",
+                BoardCritique,
                 state["status_log"],
             )
             critique.iteration = iteration
@@ -219,7 +276,7 @@ def run_board_cycle(state: dict) -> None:
             _append_message(
                 state,
                 role="supervisor",
-                speaker="Lead Partner",
+                speaker="Lead Partner (Supervisor)",
                 content=_format_critique_chat(critique),
                 iteration=iteration,
             )
@@ -239,7 +296,7 @@ def run_board_cycle(state: dict) -> None:
         summary: ExecutiveBoardSummary = _run_with_schema_retry(
             synthesis_agent,
             synthesis_prompt,
-            "ExecutiveBoardSummary",
+            ExecutiveBoardSummary,
             state["status_log"],
         )
 
@@ -247,7 +304,7 @@ def run_board_cycle(state: dict) -> None:
         _append_message(
             state,
             role="supervisor",
-            speaker="Lead Partner",
+            speaker="Lead Partner (Supervisor)",
             content=_format_executive_chat(summary),
         )
 
